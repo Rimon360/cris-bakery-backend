@@ -2,12 +2,14 @@ require("dotenv").config();
 const cron = require("node-cron");
 const axios = require("axios");
 const path = require("path");
-const ipv4 = require("ip4");
 const fs = require("fs");
 const { sendEmail, prependToFile } = require("./src/utils/util");
 
-const resetUrl = `http://${ipv4}:8000/api/products/reset_wastage`;
-const reportUrl = `http://${ipv4}:8000/api/products/get_report`;
+const BACKEND_URL = process.env.BACKEND_URL
+console.log(BACKEND_URL);
+
+const resetUrl = `${BACKEND_URL}/api/products/reset_wastage`;
+const reportUrl = `${BACKEND_URL}/api/products/get_report`;
 const fileSaveDir = "../reports/";
 console.log("Started cron job...", reportUrl);
 
