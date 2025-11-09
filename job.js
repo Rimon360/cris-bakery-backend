@@ -16,7 +16,7 @@ console.log("Started cron job...", reportUrl);
 // Run a task every 30 seconds
 // */5 * * * * * means every 5 seconds
 // 0 22 * * *
-cron.schedule("*/5 * * * * *", () => {
+cron.schedule("0 22 * * *", () => {
   axios
     .get(reportUrl)
     .then((response) => {
