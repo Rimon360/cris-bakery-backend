@@ -123,7 +123,7 @@ module.exports.updateProductById = async (req, res) => {
 
     let logData = `${getDate()};${data[0].shop_name};${username};${data[0].seq};${data[0].product_name};${baked};${wastage}\n`
 
-    prependToFile("../backend", logData)
+    prependToFile("./", logData)
 
     return res.status(200).json({
       message: "success",
