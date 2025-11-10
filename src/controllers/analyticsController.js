@@ -2,7 +2,7 @@ require("dotenv").config()
 const AnalyticsModel = require("../models/analyticsModel")
 const path = require("path")
 const fs = require("fs")
-const { getFormattedDate } = require("../utils/util")
+const { getFormattedDate, subtractDaysFromNow } = require("../utils/util")
 
 // module.exports.analyticsAdd = async (req, res) => {
 //     let dataDest = req.files['data']?.[0].filename;
@@ -44,14 +44,14 @@ module.exports.getChart = async (req, res) => {
           result = await AnalyticsModel.findOneAndUpdate({ filename: fileName }, {
             $setOnInsert: {
               filename: fileName,
-              c_end_date: process.env[fileName + "_END_DATE"] || "2025-08-28",
-              c_end_time: process.env[fileName + "_END_TIME"] || "20:00",
-              c_start_date: process.env[fileName + "_START_DATE"] || "2025-07-28",
-              c_start_time: process.env[fileName + "_START_TIME"] || "05:00",
-              cost_target: process.env[fileName + "_COST_TARGET"] || 40,
+              c_end_date: subtractDaysFromNow(1),
+              c_end_time: "20:00",
+              c_start_date: subtractDaysFromNow(7),
+              c_start_time: "05:00",
+              cost_target: 40,
             }
           }, { upsert: true, new: true })
-        } 
+        }
         // let checklists = ["c_end_date", "c_end_time", "c_start_date", "c_start_time", "cost_target"]
         // for (const p of checklists) {
         //   if (!result[p]) {

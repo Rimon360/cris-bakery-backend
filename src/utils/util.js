@@ -52,7 +52,16 @@ const getFormattedDate = () => {
   const date = _date.getDate().toString().padStart(2, "0")
   return `${year}-${month}-${date}`
 }
+
+
+const subtractDaysFromNow = (days) => {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().split('T')[0];
+}
+
 module.exports.sendEmail = sendEmail;
 module.exports.prependToFile = prependToFile;
 module.exports.seq = seq;
 module.exports.getFormattedDate = getFormattedDate;
+module.exports.subtractDaysFromNow = subtractDaysFromNow;
