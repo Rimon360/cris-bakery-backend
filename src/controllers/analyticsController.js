@@ -60,10 +60,22 @@ module.exports.getChart = async (req, res) => {
         // }
         const chartDest = fileName + ".png"
         const output = path.join(__dirname, "..", "..", "uploads", fileName + ".png")
+        const { cat_Interest_in_Halal,
+          cat_Knows_Eastern_Food,
+          cat_Local_Customer,
+          cat_Parent_with_Child,
+          cat_Student,
+          cat_Uncategorised } = result;
         if (fs.existsSync(output)) {
           dest.push({
             url: chartDest,
             id: fileName,
+            cat_Interest_in_Halal,
+            cat_Knows_Eastern_Food,
+            cat_Local_Customer,
+            cat_Parent_with_Child,
+            cat_Student,
+            cat_Uncategorised,
             c_end_date: result?.c_end_date,
             c_end_time: result?.c_end_time,
             c_start_date: result?.c_start_date,
@@ -73,11 +85,20 @@ module.exports.getChart = async (req, res) => {
           continue
         }
         const main = require(`../../uploads/${file}`)
-
-        await main(output)
+        try {
+          await main(output, result)
+        } catch (error) {
+          return res.status(403).json({ message: error.message || "Please try by chaning date range or something happened" })
+        }
         dest.push({
           url: chartDest,
           id: fileName,
+          cat_Interest_in_Halal,
+          cat_Knows_Eastern_Food,
+          cat_Local_Customer,
+          cat_Parent_with_Child,
+          cat_Student,
+          cat_Uncategorised,
           c_end_date: result?.c_end_date,
           c_end_time: result?.c_end_time,
           c_start_date: result?.c_start_date,
@@ -109,7 +130,14 @@ module.exports.getChart = async (req, res) => {
 
 module.exports.updateChart = async (req, res) => {
   try {
-    let { c_end_date, c_end_time, c_start_date, c_start_time, cost_target, id } = req.body
+    let { c_end_date, c_end_time, c_start_date, c_start_time, cost_target, id,
+      cat_Interest_in_Halal,
+      cat_Knows_Eastern_Food,
+      cat_Local_Customer,
+      cat_Parent_with_Child,
+      cat_Student,
+      cat_Uncategorised } = req.body
+ 
     fs.readdir(uploadPath, async (err, files) => {
       if (err) {
         fs.mkdir(uploadPath, (e) => { })
@@ -117,7 +145,22 @@ module.exports.updateChart = async (req, res) => {
       }
       for (const file of files) {
         if (path.extname(file) != ".js" || !file.includes(id)) continue
-        let update = await AnalyticsModel.updateOne({ filename: id }, { $set: { c_end_date, c_end_time, c_start_date, c_start_time, cost_target } })
+        let update = await AnalyticsModel.updateOne({ filename: id }, {
+          $set: {
+            cat_Interest_in_Halal,
+            cat_Knows_Eastern_Food,
+            cat_Local_Customer,
+            cat_Parent_with_Child,
+            cat_Student,
+            cat_Uncategorised,
+
+            c_end_date,
+            c_end_time,
+            c_start_date,
+            c_start_time,
+            cost_target
+          }
+        })
 
         if (update.modifiedCount > 0) {
           const main = require(`../../uploads/${file}`)
@@ -126,13 +169,34 @@ module.exports.updateChart = async (req, res) => {
           let formatted_c_end_date = endDateSplited.reverse().join("/")
           let formatted_c_start_date = startDateSplited.reverse().join("/")
 
-
-          await main(uploadPath + `/${id}.png`, formatted_c_start_date, formatted_c_end_date, c_start_time, c_end_time, cost_target)
+          let options = {
+            formatted_c_start_date, formatted_c_end_date, c_start_time, c_end_time, cost_target,
+            cat_Interest_in_Halal,
+            cat_Knows_Eastern_Food,
+            cat_Local_Customer,
+            cat_Parent_with_Child,
+            cat_Student,
+            cat_Uncategorised,
+          }
+          try {
+            await main(uploadPath + `/${id}.png`, options)
+          } catch (error) {
+            return res.status(403).json({ message: error.message || "Please try by chaning date range or something happened" })
+          }
         } else {
           return res.status(409).json({ message: "No changes detected" })
         }
       }
-      return res.status(200).json({ dest: { c_end_date, c_end_time, c_start_date, c_start_time, cost_target, id, url: id + ".png" } })
+      return res.status(200).json({
+        dest: {
+          c_end_date, c_end_time, c_start_date, c_start_time, cost_target, id, url: id + ".png", cat_Interest_in_Halal,
+          cat_Knows_Eastern_Food,
+          cat_Local_Customer,
+          cat_Parent_with_Child,
+          cat_Student,
+          cat_Uncategorised,
+        }
+      })
     })
   } catch (error) {
     return res.status(500).json({ message: error.message })
