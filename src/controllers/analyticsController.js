@@ -29,6 +29,7 @@ module.exports.getChart = async (req, res) => {
       return res.status(200).json({ dest: [] })
     }
     let dest = []
+    let isError = false;
     for (const file of files) {
       try {
         const fileName = file.split(".")[0]
@@ -45,8 +46,8 @@ module.exports.getChart = async (req, res) => {
             $setOnInsert: {
               filename: fileName,
               c_end_date: subtractDaysFromNow(1),
+              c_start_date: subtractDaysFromNow(8),
               c_end_time: "20:00",
-              c_start_date: subtractDaysFromNow(7),
               c_start_time: "05:00",
               cost_target: 40,
             }
@@ -60,12 +61,18 @@ module.exports.getChart = async (req, res) => {
         // }
         const chartDest = fileName + ".png"
         const output = path.join(__dirname, "..", "..", "uploads", fileName + ".png")
-        const { cat_Interest_in_Halal,
+        const {
+          c_start_date,
+          c_end_date,
+          c_start_time,
+          c_end_time,
+          cost_target,
+          cat_Interest_in_Halal,
           cat_Knows_Eastern_Food,
           cat_Local_Customer,
           cat_Parent_with_Child,
           cat_Student,
-          cat_Uncategorised } = result;
+          cat_Uncategorised, } = result;
         if (fs.existsSync(output)) {
           dest.push({
             url: chartDest,
@@ -77,18 +84,36 @@ module.exports.getChart = async (req, res) => {
             cat_Student,
             cat_Uncategorised,
             c_end_date: result?.c_end_date,
-            c_end_time: result?.c_end_time,
             c_start_date: result?.c_start_date,
+            c_end_time: result?.c_end_time,
             c_start_time: result?.c_start_time,
             cost_target: result?.cost_target,
           })
           continue
         }
         const main = require(`../../uploads/${file}`)
+        let endDateSplited = c_end_date.split("-")
+        let startDateSplited = c_start_date.split("-")
+        let formatted_c_end_date = endDateSplited.reverse().join("/")
+        let formatted_c_start_date = startDateSplited.reverse().join("/")
+
+        let options = {
+          formatted_c_start_date,
+          formatted_c_end_date,
+          c_start_time,
+          c_end_time,
+          cost_target,
+          cat_Interest_in_Halal,
+          cat_Knows_Eastern_Food,
+          cat_Local_Customer,
+          cat_Parent_with_Child,
+          cat_Student,
+          cat_Uncategorised,
+        }
         try {
-          await main(output, result)
+          await main(output, options)
         } catch (error) {
-          return res.status(403).json({ message: error.message || "Please try by chaning date range or something happened" })
+          isError = error.message;
         }
         dest.push({
           url: chartDest,
@@ -100,8 +125,8 @@ module.exports.getChart = async (req, res) => {
           cat_Student,
           cat_Uncategorised,
           c_end_date: result?.c_end_date,
-          c_end_time: result?.c_end_time,
           c_start_date: result?.c_start_date,
+          c_end_time: result?.c_end_time,
           c_start_time: result?.c_start_time,
           cost_target: result?.cost_target,
         })
@@ -109,7 +134,7 @@ module.exports.getChart = async (req, res) => {
         return res.status(500).json({ message: error.message })
       }
     }
-    return res.status(200).json({ dest })
+    return res.status(200).json({ dest, isError })
   })
 }
 // module.exports.deleteChart = async (req, res) => {
@@ -127,7 +152,24 @@ module.exports.getChart = async (req, res) => {
 //         return res.status(500).json({ error: true, message: "Failed to delete chart!" })
 //     }
 // }
+module.exports.resetChartDate = async (req, res) => {
 
+
+  function deleteAllPng(dir) {
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+      if (file.toLowerCase().endsWith(".png")) {
+        fs.unlinkSync(path.join(dir, file));
+      }
+    }
+  }
+
+  // usage
+  deleteAllPng(uploadPath);
+
+  await AnalyticsModel.updateMany({}, { c_end_date: subtractDaysFromNow(1), c_start_date: subtractDaysFromNow(8) })
+  return res.status(200).json({})
+}
 module.exports.updateChart = async (req, res) => {
   try {
     let { c_end_date, c_end_time, c_start_date, c_start_time, cost_target, id,
@@ -137,12 +179,13 @@ module.exports.updateChart = async (req, res) => {
       cat_Parent_with_Child,
       cat_Student,
       cat_Uncategorised } = req.body
- 
+
     fs.readdir(uploadPath, async (err, files) => {
       if (err) {
         fs.mkdir(uploadPath, (e) => { })
         return res.status(200).json({ dest: [] })
       }
+      let isError = false;
       for (const file of files) {
         if (path.extname(file) != ".js" || !file.includes(id)) continue
         let update = await AnalyticsModel.updateOne({ filename: id }, {
@@ -181,7 +224,7 @@ module.exports.updateChart = async (req, res) => {
           try {
             await main(uploadPath + `/${id}.png`, options)
           } catch (error) {
-            return res.status(403).json({ message: error.message || "Please try by chaning date range or something happened" })
+            isError = error.message
           }
         } else {
           return res.status(409).json({ message: "No changes detected" })
@@ -195,7 +238,7 @@ module.exports.updateChart = async (req, res) => {
           cat_Parent_with_Child,
           cat_Student,
           cat_Uncategorised,
-        }
+        }, isError
       })
     })
   } catch (error) {

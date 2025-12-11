@@ -6,12 +6,13 @@ const fs = require("fs");
 const { sendEmail, prependToFile } = require("./src/utils/util");
 
 const BACKEND_URL = process.env.BACKEND_URL
-console.log(BACKEND_URL);
+ 
 
 const resetUrl = `${BACKEND_URL}/api/products/reset_wastage`;
 const reportUrl = `${BACKEND_URL}/api/products/get_report`;
+const resetchartdateURL = `${BACKEND_URL}/api/analytics/resetchartdate`;
 const fileSaveDir = "../reports/";
-console.log("Started cron job...", reportUrl);
+console.log("Started cron job...", resetchartdateURL);
 
 // Run a task every 30 seconds
 // */5 * * * * * means every 5 seconds
@@ -91,10 +92,10 @@ cron.schedule("0 22 * * *", () => {
                 console.log("Wastage reset successfully");
               })
               .catch((error) => {
-                console.error("Error resetting wastage:", error);
+                console.error("Error resetting wastage:", error.message);
               });
           } catch (error) {
-            console.log(error);
+            console.log(error.message);
           }
 
         }
@@ -103,8 +104,19 @@ cron.schedule("0 22 * * *", () => {
       // end fetching data
     })
     .catch((error) => {
-      console.error("Error fetching data:", error);
+      console.error("Error fetching data:", error.message);
     });
+
+  try {
+    axios.post(resetchartdateURL)
+      .then(r => {
+        console.log('Chart date reseted...');
+
+      })
+  } catch (error) {
+    console.log('Chart date reset failed');
+  }
+
 });
 
 // Run a task every evening at 10:00 PM

@@ -1,7 +1,7 @@
 const express = require("express");
 const { adminMiddleware } = require("../middlewares/authMiddleware");
 const path = require("path"); 
-const { analyticsAdd, getChart, deleteChart,updateChart } = require("../controllers/analyticsController")
+const { analyticsAdd, getChart, deleteChart,updateChart, resetChartDate } = require("../controllers/analyticsController")
 const router = express.Router();
 
  
@@ -33,6 +33,7 @@ const router = express.Router();
 
 router.get("/getchart", adminMiddleware, getChart)
 router.post("/update", adminMiddleware, updateChart)
+router.post("/resetchartdate",  resetChartDate)
 // router.post("/delete", adminMiddleware, deleteChart)
 
 module.exports = router;
