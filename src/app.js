@@ -11,8 +11,8 @@ const app = express()
 const path = require("path")
 const verifyToken = require("./middlewares/verifyToken")
 
-// const allowedOrigins = ["http://localhost:3000", "http://192.168.0.159:3000", "http://localhost:4173","https://api.goldencrust.london"]
-const allowedOrigins = ["https://goldencrust.london","https://api.goldencrust.london"]
+const allowedOrigins = ["http://localhost:3000", "http://192.168.0.159:3000", "http://localhost:4173","https://api.goldencrust.london"]
+// const allowedOrigins = ["https://goldencrust.london","https://api.goldencrust.london"]
 
 app.use(
   cors({

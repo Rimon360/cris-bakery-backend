@@ -71,7 +71,7 @@ async function main(imageOutputDir, options) {
         try {
             const filePath = path.join(__dirname, fileName);
             if (!fs.existsSync(filePath)) {
-                console.log(`File ${fileName} not found in current directory`);
+                //console.log(`File ${fileName} not found in current directory`);
             }
 
             const workbook = XLSX.readFile(filePath);
@@ -84,16 +84,16 @@ async function main(imageOutputDir, options) {
                 sheetName = possibleNames.find(name => workbook.Sheets[name]);
 
                 if (!sheetName) {
-                    console.log('Available sheets:', workbook.SheetNames);
-                    console.log(`Sheet "labour" not found. Available sheets: ${workbook.SheetNames.join(', ')}`);
+                    //console.log('Available sheets:', workbook.SheetNames);
+                    //console.log(`Sheet "labour" not found. Available sheets: ${workbook.SheetNames.join(', ')}`);
                 }
             }
 
-            console.log(`Reading from sheet: ${sheetName}`);
+            //console.log(`Reading from sheet: ${sheetName}`);
             const worksheet = workbook.Sheets[sheetName];
             return XLSX.utils.sheet_to_json(worksheet);
         } catch (error) {
-            console.log(`Error loading Excel file: ${error.message}`);
+            //console.log(`Error loading Excel file: ${error.message}`);
             //process.exit(1);
         }
     }
@@ -261,7 +261,11 @@ async function main(imageOutputDir, options) {
                     },
                     title: {
                         display: true,
-                        text: `Labour cost (${START_DATE} to ${END_DATE})`
+                        text: `Labour cost (${START_DATE} to ${END_DATE})`,
+                                                font: {
+                            size: 26,
+                            weight: 'bold'
+                        }
                     }
                 },
                 scales: {
@@ -286,7 +290,7 @@ async function main(imageOutputDir, options) {
 
         const imageBuffer = await chartJSNodeCanvas.renderToBuffer(configuration);
         fs.writeFileSync(outputFileName, imageBuffer);
-        console.log(`Chart saved as ${outputFileName}`);
+        //console.log(`Chart saved as ${outputFileName}`);
     }
 
 
@@ -301,7 +305,7 @@ async function main(imageOutputDir, options) {
         // Create and save chart
         await createChart(chartData, LABOR_COST_TARGET, outputFileName);
 
-        console.log('Chart generation completed successfully!');
+        //console.log('Chart generation completed successfully!');
 
     } catch (error) {
         throw new Error(`${error.message}`); 

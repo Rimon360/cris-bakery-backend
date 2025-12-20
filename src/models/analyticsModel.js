@@ -8,7 +8,8 @@ const AnalyticsSchema = new mongose.Schema({
     cat_Local_Customer: { type: Boolean, default: true },
     cat_Parent_with_Child: { type: Boolean, default: true },
     cat_Student: { type: Boolean, default: true },
-    cat_Uncategorised: { type: Boolean, default: true }, 
+    cat_Uncategorised: { type: Boolean, default: true },
+    selected_products: { type: JSON },
 
     c_start_date: { type: String },
     c_end_date: { type: String },

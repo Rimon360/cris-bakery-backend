@@ -1,6 +1,6 @@
 async function main(imageOutputDir, options) {
 
-    const { formatted_c_start_date, formatted_c_end_date
+    const { formatted_c_start_date, formatted_c_end_date, selected_products
     } = options
     const [_START_DATE, _END_DATE] = [formatted_c_start_date, formatted_c_end_date]
 
@@ -9,40 +9,47 @@ async function main(imageOutputDir, options) {
     const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
     const fs = require('fs');
     const path = require('path');
-    const fileName = 'Segmentation.xlsx';
+    const fileName = 'products_sold.xlsx';
     const outputFileName = path.join(imageOutputDir);
 
     // ==================== CONFIGURATION VARIABLES ====================
-    // Default to date range in the data: Sept 22-Oct 5, 2025
+    // Default to date range
     const START_DATE = _START_DATE || '22/09/2025';
     const END_DATE = _END_DATE || '05/10/2025';
 
-    // All categories
-    let TEMP_CATEGORIES = ['Interest in Halal', 'Knows Eastern Food', 'Local Customer', 'Parent with Child', 'Student', 'Uncategorised'];
-    let ALL_CATEGORIES = [];
-    for (const key in options) {
-        let str = key.replaceAll('cat_', ' ').replaceAll('_', ' ');
-
-
-        if (TEMP_CATEGORIES.includes(str?.trim()) && options[key] === true) {
-            ALL_CATEGORIES.push(str?.trim());
-        }
-
-
+    // Selected products from dropdown (array of product names)
+    let SELECTED_PRODUCTS = []; 
+    // Parse selected products from options
+    if (selected_products && Array.isArray(selected_products)) {
+        SELECTED_PRODUCTS = selected_products;
+    } else if (options.selected_products_string) {
+        // Alternative: if passed as comma-separated string
+        SELECTED_PRODUCTS = options.selected_products_string.split(',').map(p => p.trim());
     }
-
 
     // ==================================================================
 
-    // Category colors
-    const CATEGORY_COLORS = {
-        'Knows Eastern Food': 'rgb(255, 99, 132)',
-        'Local Customer': 'rgb(54, 162, 235)',
-        'Student': 'rgb(255, 206, 86)',
-        'Parent with Child': 'rgb(75, 192, 192)',
-        'Interest in Halal': 'rgb(153, 102, 255)',
-        'Uncategorised': 'rgb(255, 159, 64)'
-    };
+    // Generate colors for products dynamically
+    function generateColor(index) {
+        const colors = [
+            'rgb(255, 99, 132)',
+            'rgb(54, 162, 235)',
+            'rgb(255, 206, 86)',
+            'rgb(75, 192, 192)',
+            'rgb(153, 102, 255)',
+            'rgb(255, 159, 64)',
+            'rgb(201, 203, 207)',
+            'rgb(255, 99, 71)',
+            'rgb(60, 179, 113)',
+            'rgb(106, 90, 205)',
+            'rgb(255, 140, 0)',
+            'rgb(220, 20, 60)',
+            'rgb(0, 191, 255)',
+            'rgb(218, 112, 214)',
+            'rgb(127, 255, 0)'
+        ];
+        return colors[index % colors.length];
+    }
 
     function parseDate(input) {
         // If it's already a Date object, return it
@@ -97,24 +104,37 @@ async function main(imageOutputDir, options) {
             const worksheet = workbook.Sheets[sheetName];
             const data = XLSX.utils.sheet_to_json(worksheet);
 
-            
+            //console.log(`Loaded ${data.length} rows from ${sheetName}`);
+            if (data.length > 0) {
+                //console.log('Columns:', Object.keys(data[0]));
+               
+            }
 
-            return data;
+            return data.sort((a, b) => parseFloat(b.value) - parseFloat(a.value));
         } catch (error) {
             //console.log(`Error loading Excel file: ${error.message}`);
             return [];
         }
     }
 
-    function processData(excelData, startDate, endDate) {
-        const start = parseDate(startDate);
-        const end = parseDate(endDate); 
-        // Set to start of day for comparison
-        start.setHours(0, 0, 0, 0);
-        end.setHours(23, 59, 59, 999);
+    function getAllProductNames(excelData) {
+        const productNames = new Set();
+        excelData.forEach(row => {
+            if (row.Name) {
+                productNames.add(row.Name.trim());
+            }
+        });
+        return Array.from(productNames).sort();
+    }
 
-        //console.log('\n=== PROCESSING DATA ===');
-        //console.log('Looking for dates between:', start.toDateString(), 'and', end.toDateString());
+    function processData(excelData, startDate, endDate, selectedProducts) {
+        let start = parseDate(startDate);
+        let end = parseDate(endDate);
+
+        // If start and end are the same, or if we want single date support
+        // Set to start of day for start, end of day for end
+        start = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+        end = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
 
         // Initialize data structure
         const dailyData = {};
@@ -122,15 +142,13 @@ async function main(imageOutputDir, options) {
         let matchedRows = 0;
         let totalQuantity = 0;
         let dateOutOfRange = 0;
-        let invalidCategory = 0;
+        let invalidProduct = 0;
         let invalidDate = 0;
 
-        // Get unique categories in the data
-        const uniqueCategories = new Set();
-        excelData.forEach(row => {
-            if (row.Department) uniqueCategories.add(row.Department);
-        });
-        //console.log('Categories found:', Array.from(uniqueCategories));
+        // Get unique products in the data
+        const allProducts = getAllProductNames(excelData);
+        //console.log(`Total unique products in file: ${allProducts.length}`);
+        //console.log('Sample products:', allProducts.slice(0, 10));
 
         // Process each row
         excelData.forEach((row, index) => {
@@ -145,15 +163,16 @@ async function main(imageOutputDir, options) {
             let rowDate;
             try {
                 rowDate = parseDate(row.Date);
-                rowDate.setHours(0, 0, 0, 0); // Normalize to start of day
+                // Normalize to start of day for comparison
+                rowDate = new Date(rowDate.getFullYear(), rowDate.getMonth(), rowDate.getDate(), 0, 0, 0, 0);
             } catch (e) {
                 if (index < 3) //console.log(`Row ${index}: Invalid date "${row.Date}"`);
                 invalidDate++;
                 return;
             }
 
-            // Check date range
-            if (rowDate < start || rowDate > end) {
+            // Check date range (inclusive on both ends)
+            if (rowDate.getTime() < start.getTime() || rowDate.getTime() > end.getTime()) {
                 dateOutOfRange++;
                 if (dateOutOfRange <= 3) {
                     //console.log(`Row ${index}: Date ${rowDate.toDateString()} outside range`);
@@ -161,12 +180,12 @@ async function main(imageOutputDir, options) {
                 return;
             }
 
-            // Check category
-            const category = row.Department;
-            if (!category || !ALL_CATEGORIES.includes(category)) {
-                invalidCategory++;
-                if (invalidCategory <= 3) {
-                    //console.log(`Row ${index}: Invalid category "${category}"`);
+            // Check product name
+            const productName = row.Name ? row.Name.trim() : null;
+            if (!productName || !selectedProducts.includes(productName)) {
+                invalidProduct++;
+                if (invalidProduct <= 3) {
+                    //console.log(`Row ${index}: Product "${productName}" not in selected list`);
                 }
                 return;
             }
@@ -177,19 +196,19 @@ async function main(imageOutputDir, options) {
             // Initialize this date if needed
             if (!dailyData[dateKey]) {
                 dailyData[dateKey] = {};
-                ALL_CATEGORIES.forEach(cat => {
-                    dailyData[dateKey][cat] = 0;
+                selectedProducts.forEach(prod => {
+                    dailyData[dateKey][prod] = 0;
                 });
             }
 
             // Add quantity
-            const quantity = parseFloat(row.Quantity) || 0;
-            dailyData[dateKey][category] += quantity;
+            const quantity = parseFloat(row.Qty) || 0;
+            dailyData[dateKey][productName] += quantity;
             matchedRows++;
             totalQuantity += quantity;
 
             if (matchedRows <= 5) {
-                //console.log(`✓ Row ${index}: ${category} on ${dateKey} qty=${quantity}`);
+                //console.log(`✓ Row ${index}: ${productName} on ${dateKey} qty=${quantity}`);
             }
         });
 
@@ -197,7 +216,7 @@ async function main(imageOutputDir, options) {
         //console.log(`Total rows in file: ${excelData.length}`);
         //console.log(`Successfully matched: ${matchedRows}`);
         //console.log(`Out of date range: ${dateOutOfRange}`);
-        //console.log(`Invalid categories: ${invalidCategory}`);
+        //console.log(`Not in selected products: ${invalidProduct}`);
         //console.log(`Invalid dates: ${invalidDate}`);
         //console.log(`Total quantity: ${totalQuantity}`);
         //console.log(`Dates with data: ${Object.keys(dailyData).length}`);
@@ -205,14 +224,14 @@ async function main(imageOutputDir, options) {
         // Show data summary
         //console.log('\n=== DATA BY DATE ===');
         Object.keys(dailyData).sort().forEach(date => {
-            const dayTotal = ALL_CATEGORIES.reduce((sum, cat) => sum + dailyData[date][cat], 0);
+            const dayTotal = selectedProducts.reduce((sum, prod) => sum + dailyData[date][prod], 0);
             //console.log(`${date}: ${dayTotal} items`);
         });
 
         return dailyData;
     }
 
-    async function createChart(dailyData, startDate, endDate, outputFileName) {
+    async function createChart(dailyData, startDate, endDate, selectedProducts, outputFileName) {
         const width = 1200;
         const height = 600;
         const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height });
@@ -225,17 +244,18 @@ async function main(imageOutputDir, options) {
         //console.log('\n=== CREATING CHART ===');
         //console.log(`Chart will show ${dates.length} dates`);
 
-        // Create datasets for all categories
-        const datasets = ALL_CATEGORIES.map(category => {
-            const data = dates.map(date => dailyData[date][category] || 0);
+        // Create datasets for selected products
+        const datasets = selectedProducts.map((product, index) => {
+            const data = dates.map(date => dailyData[date][product] || 0);
             const total = data.reduce((a, b) => a + b, 0);
-            //console.log(`${category}: ${total} total items across all dates`);
+            //console.log(`${product}: ${total} total items across all dates`);
 
+            const color = generateColor(index);
             return {
-                label: category,
+                label: product,
                 data: data,
-                borderColor: CATEGORY_COLORS[category],
-                backgroundColor: CATEGORY_COLORS[category].replace('rgb', 'rgba').replace(')', ', 0.2)'),
+                borderColor: color,
+                backgroundColor: color.replace('rgb', 'rgba').replace(')', ', 0.2)'),
                 borderWidth: 2,
                 fill: false,
                 tension: 0.1,
@@ -265,7 +285,7 @@ async function main(imageOutputDir, options) {
                     },
                     title: {
                         display: true,
-                        text: `Client Segmentation (${startDate} to ${endDate})`,
+                        text: `Products Qty (${startDate} to ${endDate})`,
                         font: {
                             size: 26,
                             weight: 'bold'
@@ -298,27 +318,35 @@ async function main(imageOutputDir, options) {
     }
 
     try {
-        //console.log('=== STARTING CLIENT SEGMENTATION CHART ===\n');
+        //console.log('=== STARTING PRODUCTS QTY CHART ===\n');
 
         // Load Excel data
-        const excelData = loadExcelData(fileName); 
-        
+        const excelData = loadExcelData(fileName);
+
         if (excelData.length === 0) {
             throw new Error('No data loaded from Excel file!');
         }
 
+        // If no products selected, get all products for reference
+        const allProducts = getAllProductNames(excelData);
+
+        if (SELECTED_PRODUCTS.length === 0) {
+            SELECTED_PRODUCTS = allProducts.slice(0, allProducts.length < 5 ? allProducts.length : 5) 
+            // throw new Error('Please select at least one product from the dropdown menu');
+        }
+
         // Process data
-        const dailyData = processData(excelData, START_DATE, END_DATE);
+        const dailyData = processData(excelData, START_DATE, END_DATE, SELECTED_PRODUCTS);
 
         if (Object.keys(dailyData).length === 0) {
-            throw new Error('No data matched the date range!');
+            throw new Error('No data matched the date range and selected products!');
         }
 
         // Create and save chart
-        await createChart(dailyData, START_DATE, END_DATE, outputFileName);
+        await createChart(dailyData, START_DATE, END_DATE, SELECTED_PRODUCTS, outputFileName);
 
         //console.log('\n=== CHART GENERATION COMPLETED ===');
-
+        return { productsName: allProducts }
     } catch (error) {
         throw new Error(`${error.message}`);
     }

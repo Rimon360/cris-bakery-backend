@@ -30,6 +30,7 @@ module.exports.getChart = async (req, res) => {
     }
     let dest = []
     let isError = false;
+    let resMain = null
     for (const file of files) {
       try {
         const fileName = file.split(".")[0]
@@ -39,8 +40,6 @@ module.exports.getChart = async (req, res) => {
 
         // db start
         let result = await AnalyticsModel.findOne({ filename: fileName })
-
-
         if (!result) {
           result = await AnalyticsModel.findOneAndUpdate({ filename: fileName }, {
             $setOnInsert: {
@@ -53,12 +52,6 @@ module.exports.getChart = async (req, res) => {
             }
           }, { upsert: true, new: true })
         }
-        // let checklists = ["c_end_date", "c_end_time", "c_start_date", "c_start_time", "cost_target"]
-        // for (const p of checklists) {
-        //   if (!result[p]) {
-        //     return res.status(400).json({ message: `(${p}) - value is null or undefined. ` })
-        //   }
-        // }
         const chartDest = fileName + ".png"
         const output = path.join(__dirname, "..", "..", "uploads", fileName + ".png")
         const {
@@ -72,9 +65,11 @@ module.exports.getChart = async (req, res) => {
           cat_Local_Customer,
           cat_Parent_with_Child,
           cat_Student,
-          cat_Uncategorised, } = result;
-        if (fs.existsSync(output)) {
+          cat_Uncategorised, selected_products } = result;
+        if (fs.existsSync(output) && !fileName.includes('ProductsQty')) {
           dest.push({
+            selected_products,
+            resMain,
             url: chartDest,
             id: fileName,
             cat_Interest_in_Halal,
@@ -109,13 +104,16 @@ module.exports.getChart = async (req, res) => {
           cat_Parent_with_Child,
           cat_Student,
           cat_Uncategorised,
+          selected_products
         }
+
         try {
-          await main(output, options)
+          resMain = await main(uploadPath + `/${fileName}.png`, options)
         } catch (error) {
-          isError = error.message;
+          isError = error.message
         }
         dest.push({
+          resMain,
           url: chartDest,
           id: fileName,
           cat_Interest_in_Halal,
@@ -178,7 +176,7 @@ module.exports.updateChart = async (req, res) => {
       cat_Local_Customer,
       cat_Parent_with_Child,
       cat_Student,
-      cat_Uncategorised } = req.body
+      cat_Uncategorised, selected_products } = req.body
 
     fs.readdir(uploadPath, async (err, files) => {
       if (err) {
@@ -186,6 +184,7 @@ module.exports.updateChart = async (req, res) => {
         return res.status(200).json({ dest: [] })
       }
       let isError = false;
+      let resMain = null
       for (const file of files) {
         if (path.extname(file) != ".js" || !file.includes(id)) continue
         let update = await AnalyticsModel.updateOne({ filename: id }, {
@@ -196,7 +195,7 @@ module.exports.updateChart = async (req, res) => {
             cat_Parent_with_Child,
             cat_Student,
             cat_Uncategorised,
-
+            selected_products,
             c_end_date,
             c_end_time,
             c_start_date,
@@ -220,9 +219,11 @@ module.exports.updateChart = async (req, res) => {
             cat_Parent_with_Child,
             cat_Student,
             cat_Uncategorised,
+            selected_products
           }
+
           try {
-            await main(uploadPath + `/${id}.png`, options)
+            resMain = await main(uploadPath + `/${id}.png`, options)
           } catch (error) {
             isError = error.message
           }
@@ -232,12 +233,14 @@ module.exports.updateChart = async (req, res) => {
       }
       return res.status(200).json({
         dest: {
+          resMain,
           c_end_date, c_end_time, c_start_date, c_start_time, cost_target, id, url: id + ".png", cat_Interest_in_Halal,
           cat_Knows_Eastern_Food,
           cat_Local_Customer,
           cat_Parent_with_Child,
           cat_Student,
           cat_Uncategorised,
+          selected_products
         }, isError
       })
     })
