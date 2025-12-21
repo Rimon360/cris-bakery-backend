@@ -1,50 +1,28 @@
 async function main(imageOutputDir, options) {
 
-    const { formatted_c_start_date, formatted_c_end_date, show_weekends
-    } = options
-    const [_START_DATE, _END_DATE] = [formatted_c_start_date, formatted_c_end_date]
-
+    const { formatted_c_start_date, formatted_c_end_date, show_weekends } = options;
+    const [_START_DATE, _END_DATE] = [formatted_c_start_date, formatted_c_end_date];
 
     const XLSX = require('xlsx');
     const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
     const fs = require('fs');
     const path = require('path');
-    const fileName = 'Segmentation.xlsx';
+    const fileName = 'delivery.xlsx';
     const outputFileName = path.join(imageOutputDir);
 
     // ==================== CONFIGURATION VARIABLES ====================
-    // Default to date range in the data: Sept 22-Oct 5, 2025
-    const START_DATE = _START_DATE || '22/09/2025';
-    const END_DATE = _END_DATE || '05/10/2025';
+    // Default to last 7 days if no dates provided
+    const today = new Date();
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 7);
 
-    // All categories
-    let TEMP_CATEGORIES = ['Interest in Halal', 'Knows Eastern Food', 'Local Customer', 'Parent with Child', 'Student', 'Uncategorised'];
-    let ALL_CATEGORIES = [];
-    for (const key in options) {
-        let str = key.replaceAll('cat_', ' ').replaceAll('_', ' ');
+    const START_DATE = _START_DATE || formatDate(sevenDaysAgo);
+    const END_DATE = _END_DATE || formatDate(today);
 
-
-        if (TEMP_CATEGORIES.includes(str?.trim()) && options[key] === true) {
-            ALL_CATEGORIES.push(str?.trim());
-        }
-
-
-    }
-
-    // Show weekends option (default: false)
+    // Show weekends option (default: true)
     const SHOW_WEEKENDS = show_weekends !== undefined ? show_weekends : true;
 
     // ==================================================================
-
-    // Category colors
-    const CATEGORY_COLORS = {
-        'Knows Eastern Food': 'rgb(255, 99, 132)',
-        'Local Customer': 'rgb(54, 162, 235)',
-        'Student': 'rgb(255, 206, 86)',
-        'Parent with Child': 'rgb(75, 192, 192)',
-        'Interest in Halal': 'rgb(153, 102, 255)',
-        'Uncategorised': 'rgb(255, 159, 64)'
-    };
 
     function parseDate(input) {
         // If it's already a Date object, return it
@@ -90,61 +68,61 @@ async function main(imageOutputDir, options) {
         return dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
     }
 
+    // Parse currency values and convert to number
+    function parseCurrencyValue(value) {
+        if (typeof value === 'number') {
+            return value;
+        }
+        
+        if (typeof value === 'string') {
+            // Remove currency symbols, commas, and whitespace
+            const cleaned = value.replace(/[£$€¥₹,\s]/g, '').trim();
+            const parsed = parseFloat(cleaned);
+            return isNaN(parsed) ? 0 : parsed;
+        }
+        
+        return 0;
+    }
+
     function loadExcelData(fileName) {
         try {
             const filePath = path.join(__dirname, fileName);
 
             if (!fs.existsSync(filePath)) {
-                //console.log(`File ${fileName} not found at ${filePath}`);
                 return [];
             }
 
-            // CRITICAL: Read with cellDates to get Date objects
+            // Read with cellDates to get Date objects
             const workbook = XLSX.readFile(filePath, { cellDates: true });
-            const sheetName = workbook.SheetNames[0];
+            const sheetName = workbook.SheetNames[0]; 
             const worksheet = workbook.Sheets[sheetName];
             const data = XLSX.utils.sheet_to_json(worksheet);
 
-            
-
             return data;
         } catch (error) {
-            //console.log(`Error loading Excel file: ${error.message}`);
             return [];
         }
     }
 
     function processData(excelData, startDate, endDate) {
-        const start = parseDate(startDate);
-        const end = parseDate(endDate); 
-        // Set to start of day for comparison
-        start.setHours(0, 0, 0, 0);
-        end.setHours(23, 59, 59, 999);
+        let start = parseDate(startDate);
+        let end = parseDate(endDate);
 
-        //console.log('\n=== PROCESSING DATA ===');
-        //console.log('Looking for dates between:', start.toDateString(), 'and', end.toDateString());
+        // Set to start of day for start, end of day for end
+        start = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+        end = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
 
         // Initialize data structure
         const dailyData = {};
 
         let matchedRows = 0;
-        let totalQuantity = 0;
         let dateOutOfRange = 0;
-        let invalidCategory = 0;
         let invalidDate = 0;
-
-        // Get unique categories in the data
-        const uniqueCategories = new Set();
-        excelData.forEach(row => {
-            if (row.Department) uniqueCategories.add(row.Department);
-        });
-        //console.log('Categories found:', Array.from(uniqueCategories));
 
         // Process each row
         excelData.forEach((row, index) => {
             // Check if Date exists
-            if (!row.Date) {
-                if (index < 3) //console.log(`Row ${index}: Missing Date`);
+            if (!row.Date && !row.date) {
                 invalidDate++;
                 return;
             }
@@ -152,30 +130,17 @@ async function main(imageOutputDir, options) {
             // Parse the date (handles both Date objects and strings)
             let rowDate;
             try {
-                rowDate = parseDate(row.Date);
-                rowDate.setHours(0, 0, 0, 0); // Normalize to start of day
+                rowDate = parseDate(row.Date || row.date);
+                // Normalize to start of day for comparison
+                rowDate = new Date(rowDate.getFullYear(), rowDate.getMonth(), rowDate.getDate(), 0, 0, 0, 0);
             } catch (e) {
-                if (index < 3) //console.log(`Row ${index}: Invalid date "${row.Date}"`);
                 invalidDate++;
                 return;
             }
 
-            // Check date range
-            if (rowDate < start || rowDate > end) {
+            // Check date range (inclusive on both ends)
+            if (rowDate.getTime() < start.getTime() || rowDate.getTime() > end.getTime()) {
                 dateOutOfRange++;
-                if (dateOutOfRange <= 3) {
-                    //console.log(`Row ${index}: Date ${rowDate.toDateString()} outside range`);
-                }
-                return;
-            }
-
-            // Check category
-            const category = row.Department;
-            if (!category || !ALL_CATEGORIES.includes(category)) {
-                invalidCategory++;
-                if (invalidCategory <= 3) {
-                    //console.log(`Row ${index}: Invalid category "${category}"`);
-                }
                 return;
             }
 
@@ -184,37 +149,20 @@ async function main(imageOutputDir, options) {
 
             // Initialize this date if needed
             if (!dailyData[dateKey]) {
-                dailyData[dateKey] = {};
-                ALL_CATEGORIES.forEach(cat => {
-                    dailyData[dateKey][cat] = 0;
-                });
+                dailyData[dateKey] = {
+                    justEat: 0,
+                    deliveroo: 0
+                };
             }
 
-            // Add quantity
-            const quantity = parseFloat(row.Quantity) || 0;
-            dailyData[dateKey][category] += quantity;
+            // Parse and add sales values (handle currency symbols)
+            // console.log(row);
+            const justEatSales = parseCurrencyValue(row['Just eat Sales'] || row[' Just eat Sales '] || 0);
+            const deliverooSales = parseCurrencyValue(row['Deliveroo Sales']||row[' Deliveroo Sales '] || 0);
+
+            dailyData[dateKey].justEat += justEatSales;
+            dailyData[dateKey].deliveroo += deliverooSales;
             matchedRows++;
-            totalQuantity += quantity;
-
-            if (matchedRows <= 5) {
-                //console.log(`✓ Row ${index}: ${category} on ${dateKey} qty=${quantity}`);
-            }
-        });
-
-        //console.log('\n=== PROCESSING SUMMARY ===');
-        //console.log(`Total rows in file: ${excelData.length}`);
-        //console.log(`Successfully matched: ${matchedRows}`);
-        //console.log(`Out of date range: ${dateOutOfRange}`);
-        //console.log(`Invalid categories: ${invalidCategory}`);
-        //console.log(`Invalid dates: ${invalidDate}`);
-        //console.log(`Total quantity: ${totalQuantity}`);
-        //console.log(`Dates with data: ${Object.keys(dailyData).length}`);
-
-        // Show data summary
-        //console.log('\n=== DATA BY DATE ===');
-        Object.keys(dailyData).sort().forEach(date => {
-            const dayTotal = ALL_CATEGORIES.reduce((sum, cat) => sum + dailyData[date][cat], 0);
-            //console.log(`${date}: ${dayTotal} items`);
         });
 
         return dailyData;
@@ -230,21 +178,18 @@ async function main(imageOutputDir, options) {
             return parseDate(a) - parseDate(b);
         });
 
-        //console.log('\n=== CREATING CHART ===');
-        //console.log(`Chart will show ${dates.length} dates`);
-
         const datasets = [];
 
         // Add weekend indicator as bar chart (if enabled)
         if (showWeekends) {
-            // Calculate max quantity across all categories for proper scaling
-            const maxQuantity = Math.max(...dates.map(date => 
-                ALL_CATEGORIES.reduce((sum, cat) => sum + (dailyData[date][cat] || 0), 0)
+            // Calculate max sales value across all dates for proper scaling
+            const maxSales = Math.max(...dates.map(date => 
+                Math.max(dailyData[date].justEat, dailyData[date].deliveroo)
             ));
 
             // Create weekend indicator data
             const weekendData = dates.map(date => {
-                return isWeekend(date) ? maxQuantity * 1.1 : 0; // 110% of max to cover entire chart height
+                return isWeekend(date) ? maxSales * 1.1 : 0; // 110% of max to cover entire chart height
             });
 
             datasets.push({
@@ -260,25 +205,34 @@ async function main(imageOutputDir, options) {
             });
         }
 
-        // Create datasets for all categories (line charts)
-        ALL_CATEGORIES.forEach(category => {
-            const data = dates.map(date => dailyData[date][category] || 0);
-            const total = data.reduce((a, b) => a + b, 0);
-            //console.log(`${category}: ${total} total items across all dates`);
+        // Just Eat Sales line
+        datasets.push({
+            label: 'Just Eat Sales',
+            data: dates.map(date => dailyData[date].justEat),
+            type: 'line',
+            borderColor: 'rgb(255, 99, 132)',
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.1,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            order: 1
+        });
 
-            datasets.push({
-                label: category,
-                data: data,
-                type: 'line',
-                borderColor: CATEGORY_COLORS[category],
-                backgroundColor: CATEGORY_COLORS[category].replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                borderWidth: 2,
-                fill: false,
-                tension: 0.1,
-                pointRadius: 3,
-                pointHoverRadius: 5,
-                order: 1 // Render in front of bars
-            });
+        // Deliveroo Sales line
+        datasets.push({
+            label: 'Deliveroo Sales',
+            data: dates.map(date => dailyData[date].deliveroo),
+            type: 'line',
+            borderColor: 'rgb(54, 162, 235)',
+            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.1,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            order: 1
         });
 
         const configuration = {
@@ -302,7 +256,7 @@ async function main(imageOutputDir, options) {
                     },
                     title: {
                         display: true,
-                        text: `Client Segmentation (${startDate} to ${endDate})`,
+                        text: `Delivery Sales (${startDate} to ${endDate})`,
                         font: {
                             size: 26,
                             weight: 'bold'
@@ -321,7 +275,7 @@ async function main(imageOutputDir, options) {
                         display: true,
                         title: {
                             display: true,
-                            text: 'Quantity'
+                            text: 'Sales Amount'
                         },
                         beginAtZero: true
                     }
@@ -331,17 +285,14 @@ async function main(imageOutputDir, options) {
 
         const imageBuffer = await chartJSNodeCanvas.renderToBuffer(configuration);
         fs.writeFileSync(outputFileName, imageBuffer);
-        //console.log(`✓ Chart saved to ${outputFileName}`);
     }
 
     try {
-        //console.log('=== STARTING CLIENT SEGMENTATION CHART ===\n');
-
         // Load Excel data
-        const excelData = loadExcelData(fileName); 
-        
+        const excelData = loadExcelData(fileName);
+
         if (excelData.length === 0) {
-            throw new Error('No data loaded from Excel file!');
+            throw new Error('No data loaded from delivery.xlsx file!');
         }
 
         // Process data
@@ -354,8 +305,7 @@ async function main(imageOutputDir, options) {
         // Create and save chart
         await createChart(dailyData, START_DATE, END_DATE, outputFileName, SHOW_WEEKENDS);
 
-        //console.log('\n=== CHART GENERATION COMPLETED ===');
-
+        return { success: true };
     } catch (error) {
         throw new Error(`${error.message}`);
     }

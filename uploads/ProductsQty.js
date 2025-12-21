@@ -1,6 +1,6 @@
 async function main(imageOutputDir, options) {
 
-    const { formatted_c_start_date, formatted_c_end_date, selected_products
+    const { formatted_c_start_date, formatted_c_end_date, selected_products, show_weekends
     } = options
     const [_START_DATE, _END_DATE] = [formatted_c_start_date, formatted_c_end_date]
 
@@ -26,6 +26,9 @@ async function main(imageOutputDir, options) {
         // Alternative: if passed as comma-separated string
         SELECTED_PRODUCTS = options.selected_products_string.split(',').map(p => p.trim());
     }
+
+    // Show weekends option (default: false)
+    const SHOW_WEEKENDS = show_weekends !== undefined ? show_weekends : true;
 
     // ==================================================================
 
@@ -87,6 +90,12 @@ async function main(imageOutputDir, options) {
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
         const year = date.getFullYear();
         return `${day}/${month}/${year}`;
+    }
+
+    function isWeekend(dateStr) {
+        const date = parseDate(dateStr);
+        const dayOfWeek = date.getDay();
+        return dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
     }
 
     function loadExcelData(fileName) {
@@ -231,7 +240,7 @@ async function main(imageOutputDir, options) {
         return dailyData;
     }
 
-    async function createChart(dailyData, startDate, endDate, selectedProducts, outputFileName) {
+    async function createChart(dailyData, startDate, endDate, selectedProducts, outputFileName, showWeekends) {
         const width = 1200;
         const height = 600;
         const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height });
@@ -244,24 +253,53 @@ async function main(imageOutputDir, options) {
         //console.log('\n=== CREATING CHART ===');
         //console.log(`Chart will show ${dates.length} dates`);
 
-        // Create datasets for selected products
-        const datasets = selectedProducts.map((product, index) => {
+        const datasets = [];
+
+        // Add weekend indicator as bar chart (if enabled)
+        if (showWeekends) {
+            // Calculate max quantity across all products for proper scaling
+            const maxQuantity = Math.max(...dates.map(date => 
+                selectedProducts.reduce((sum, prod) => sum + (dailyData[date][prod] || 0), 0)
+            ));
+
+            // Create weekend indicator data
+            const weekendData = dates.map(date => {
+                return isWeekend(date) ? maxQuantity * 1.1 : 0; // 110% of max to cover entire chart height
+            });
+
+            datasets.push({
+                label: 'Weekend',
+                data: weekendData,
+                type: 'bar',
+                backgroundColor: 'rgba(128, 128, 128, 0.15)',
+                borderColor: 'rgba(128, 128, 128, 0.3)',
+                borderWidth: 0,
+                order: 2, // Render behind lines
+                barPercentage: 1.0,
+                categoryPercentage: 1.0
+            });
+        }
+
+        // Create datasets for selected products (line charts)
+        selectedProducts.forEach((product, index) => {
             const data = dates.map(date => dailyData[date][product] || 0);
             const total = data.reduce((a, b) => a + b, 0);
             //console.log(`${product}: ${total} total items across all dates`);
 
             const color = generateColor(index);
-            return {
+            datasets.push({
                 label: product,
                 data: data,
+                type: 'line',
                 borderColor: color,
                 backgroundColor: color.replace('rgb', 'rgba').replace(')', ', 0.2)'),
                 borderWidth: 2,
                 fill: false,
                 tension: 0.1,
                 pointRadius: 3,
-                pointHoverRadius: 5
-            };
+                pointHoverRadius: 5,
+                order: 1 // Render in front of bars
+            });
         });
 
         const configuration = {
@@ -343,7 +381,7 @@ async function main(imageOutputDir, options) {
         }
 
         // Create and save chart
-        await createChart(dailyData, START_DATE, END_DATE, SELECTED_PRODUCTS, outputFileName);
+        await createChart(dailyData, START_DATE, END_DATE, SELECTED_PRODUCTS, outputFileName, SHOW_WEEKENDS);
 
         //console.log('\n=== CHART GENERATION COMPLETED ===');
         return { productsName: allProducts }
