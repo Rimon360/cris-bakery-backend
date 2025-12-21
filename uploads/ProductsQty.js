@@ -18,7 +18,7 @@ async function main(imageOutputDir, options) {
     const END_DATE = _END_DATE || '05/10/2025';
 
     // Selected products from dropdown (array of product names)
-    let SELECTED_PRODUCTS = []; 
+    let SELECTED_PRODUCTS = [];
     // Parse selected products from options
     if (selected_products && Array.isArray(selected_products)) {
         SELECTED_PRODUCTS = selected_products;
@@ -116,7 +116,7 @@ async function main(imageOutputDir, options) {
             //console.log(`Loaded ${data.length} rows from ${sheetName}`);
             if (data.length > 0) {
                 //console.log('Columns:', Object.keys(data[0]));
-               
+
             }
 
             return data.sort((a, b) => parseFloat(b.value) - parseFloat(a.value));
@@ -164,7 +164,7 @@ async function main(imageOutputDir, options) {
             // Check if Date exists
             if (!row.Date) {
                 if (index < 3) //console.log(`Row ${index}: Missing Date`);
-                invalidDate++;
+                    invalidDate++;
                 return;
             }
 
@@ -176,7 +176,7 @@ async function main(imageOutputDir, options) {
                 rowDate = new Date(rowDate.getFullYear(), rowDate.getMonth(), rowDate.getDate(), 0, 0, 0, 0);
             } catch (e) {
                 if (index < 3) //console.log(`Row ${index}: Invalid date "${row.Date}"`);
-                invalidDate++;
+                    invalidDate++;
                 return;
             }
 
@@ -258,7 +258,7 @@ async function main(imageOutputDir, options) {
         // Add weekend indicator as bar chart (if enabled)
         if (showWeekends) {
             // Calculate max quantity across all products for proper scaling
-            const maxQuantity = Math.max(...dates.map(date => 
+            const maxQuantity = Math.max(...dates.map(date =>
                 selectedProducts.reduce((sum, prod) => sum + (dailyData[date][prod] || 0), 0)
             ));
 
@@ -369,8 +369,26 @@ async function main(imageOutputDir, options) {
         const allProducts = getAllProductNames(excelData);
 
         if (SELECTED_PRODUCTS.length === 0) {
-            SELECTED_PRODUCTS = allProducts.slice(0, allProducts.length < 5 ? allProducts.length : 5) 
-            // throw new Error('Please select at least one product from the dropdown menu');
+            // Calculate total quantity for each product
+            const productTotals = {};
+
+            excelData.forEach(row => {
+                const productName = row.Name ? row.Name.trim() : null;
+                if (productName) {
+                    const quantity = parseFloat(row.Qty) || 0;
+                    productTotals[productName] = (productTotals[productName] || 0) + quantity;
+                }
+            });
+
+            // Sort products by total quantity (descending) and take top 5
+            const topProducts = Object.entries(productTotals)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, Math.min(5, Object.keys(productTotals).length))
+                .map(entry => entry[0]);
+
+            SELECTED_PRODUCTS = topProducts;
+
+            console.log(`No products selected. Auto-selected top ${SELECTED_PRODUCTS.length} products by quantity:`, SELECTED_PRODUCTS);
         }
 
         // Process data

@@ -111,7 +111,7 @@ async function main(imageOutputDir, options) {
             const workbook = XLSX.readFile(filePath, { cellDates: true });
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            const data = XLSX.utils.sheet_to_json(worksheet); 
+            const data = XLSX.utils.sheet_to_json(worksheet);
 
             return data.sort((a, b) => parseFloat(b.value) - parseFloat(a.value));
         } catch (error) {
@@ -205,7 +205,7 @@ async function main(imageOutputDir, options) {
             }
 
             // Add value
-            const value = parseFloat(row.Value) || 0;
+            const value = parseFloat(row['Ex VAT']||row[' Ex VAT ']) || 0;
             dailyData[dateKey][productName] += value;
             matchedRows++;
             totalValue += value;
@@ -229,8 +229,7 @@ async function main(imageOutputDir, options) {
         Object.keys(dailyData).sort().forEach(date => {
             const dayTotal = selectedProducts.reduce((sum, prod) => sum + dailyData[date][prod], 0);
             //console.log(`${date}: ${dayTotal.toFixed(2)} value`);
-        });
-
+        }); 
         return dailyData;
     }
 
@@ -252,7 +251,7 @@ async function main(imageOutputDir, options) {
         // Add weekend indicator as bar chart (if enabled)
         if (showWeekends) {
             // Calculate max value across all products for proper scaling
-            const maxValue = Math.max(...dates.map(date => 
+            const maxValue = Math.max(...dates.map(date =>
                 selectedProducts.reduce((sum, prod) => sum + (dailyData[date][prod] || 0), 0)
             ));
 
@@ -364,9 +363,29 @@ async function main(imageOutputDir, options) {
         const allProducts = getAllProductNames(excelData);
 
         if (SELECTED_PRODUCTS.length === 0) {
-            SELECTED_PRODUCTS = allProducts.slice(0, allProducts.length < 5 ? allProducts.length : 5)
-            // throw new Error('Please select at least one product from the dropdown menu');
+            // Calculate total quantity for each product
+            const productTotals = {};
+
+            excelData.forEach(row => {
+                const productName = row.Name ? row.Name.trim() : null;
+                if (productName) {
+                    const quantity = parseFloat(row.Qty) || 0;
+                    productTotals[productName] = (productTotals[productName] || 0) + quantity;
+                }
+            });
+
+            // Sort products by total quantity (descending) and take top 5
+            const topProducts = Object.entries(productTotals)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, Math.min(5, Object.keys(productTotals).length))
+                .map(entry => entry[0]);
+
+            SELECTED_PRODUCTS = topProducts;
+
+            console.log(`No products selected. Auto-selected top ${SELECTED_PRODUCTS.length} products by quantity:`, SELECTED_PRODUCTS);
         }
+
+
 
         // Process data
         const dailyData = processData(excelData, START_DATE, END_DATE, SELECTED_PRODUCTS);
