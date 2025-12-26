@@ -165,7 +165,7 @@ module.exports.resetChartDate = async (req, res) => {
   // usage
   deleteAllPng(uploadPath);
 
-  await AnalyticsModel.updateMany({}, { c_end_date: subtractDaysFromNow(1), c_start_date: subtractDaysFromNow(8) })
+  await AnalyticsModel.updateMany({}, { c_end_date: subtractDaysFromNow(1), c_start_date: subtractDaysFromNow(8), selected_products: null })
   return res.status(200).json({})
 }
 module.exports.updateChart = async (req, res) => {
